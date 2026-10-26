@@ -43,6 +43,18 @@ fi
 # ── 2. fastfetch: кастомизации убраны (решение владельца).
 # fastfetch живёт дефолтной жизнью; логотип придёт upstream-PR'ом.
 
+# ── 2a. Патч Presentation.qml (баг calamares 3.4.2 + Qt 6.9+) ──────
+# Апстрим использует deprecated-инжект параметра в signal-хэндлер
+# (onClicked: { if (mouse.button ...) }), который Qt 6.9+ уже не
+# подставляет: хэндлер падает и слайдшоу Calamares не листается.
+# Фикс по совету варнинга - формальный параметр стрелки.
+QMLDIR=/usr/share/calamares/qml/calamares/slideshow
+if [[ -f "$QMLDIR/Presentation.qml" ]] && grep -q "onClicked: {" "$QMLDIR/Presentation.qml"; then
+  perl -0pi -e 's/onClicked: \{(\s+if \(mouse\.button)/onClicked: (mouse) => {$1/' \
+    "$QMLDIR/Presentation.qml"
+  log "patched Presentation.qml (deprecated signal injection)"
+fi
+
 # ── 3. motd AyOS вместо Arch-справки ──────────────────────────────
 log "writing /etc/motd"
 cat > /etc/motd <<'EOF'

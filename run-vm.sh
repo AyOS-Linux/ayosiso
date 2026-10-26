@@ -47,7 +47,7 @@ esac
 # надёжнее e1000). Live использует NetworkManager — он сам поднимает DHCP.
 exec qemu-system-x86_64 \
   -enable-kvm \
-  -m 4096 -smp 4 \
+  -m 3193 -smp 4 \
   -machine q35 -cpu host \
   -drive if=pflash,format=raw,readonly=on,file="$OVMF_DIR/OVMF_CODE.4m.fd" \
   -drive if=pflash,format=raw,file="$VARS_FILE" \
