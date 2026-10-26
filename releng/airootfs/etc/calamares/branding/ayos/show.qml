@@ -12,20 +12,10 @@ Presentation
 
     Slide {
         Image {
-            source: "wallpaper.png"
+            source: "slide3.png"
             width: parent.width
             fillMode: Image.PreserveAspectFit
             anchors.centerIn: parent
-        }
-        Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 60
-            text: "AyOS Material 26.11"
-            font.pixelSize: 44
-            color: "white"
-            style: Text.Outline
-            styleColor: "#c9741f"
         }
     }
 }
