@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# AyOS Material 26.11 — /usr/local/bin/ayos-osrelease
+# Вызывается из Calamares shellprocess в chroot целевой системы.
+# Пишет финальный /etc/os-release по выбранной редакции (§3 паспорта).
+
+set -euo pipefail
+
+EDITION="${1:-}"
+[[ -n "$EDITION" ]] || { echo "usage: ayos-osrelease <edition>" >&2; exit 1; }
+
+# Внешне одна AyOS без имён редакций: fastfetch и меню загрузки показывают
+# «AyOS v26.11» (PR fastfetch с логотипом AyOS только предстоит).
+VARIANT_ID="$EDITION"
+
+cat > /etc/os-release <<EOF
+NAME="AyOS"
+PRETTY_NAME="AyOS v26.11"
+ID=ayos
+ID_LIKE=arch
+BUILD_ID=26.11
+VARIANT_ID=$VARIANT_ID
+HOME_URL="https://github.com/AyOS-Linux/ayosiso"
+DOCUMENTATION_URL="https://github.com/AyOS-Linux/ayosiso/wiki"
+LOGO=ayos
+EOF
+chmod 644 /etc/os-release
+
+# os-release-манжеты для lsb_release-совместимости не пишем: systemd читает os-release.
+
+exit 0

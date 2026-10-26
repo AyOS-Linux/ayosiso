@@ -1,0 +1,15 @@
+# Generated build trees and VM state; never commit these.
+/work/
+/out/
+/chroot/
+/repo/
+/ayos-test.qcow2
+/OVMF_VARS.fd
+/OVMF_VARS_LIVE.fd
+/build.log
+*.iso
+*.iso.zst
+*.pkg.tar.zst
+# Live account databases are generated from the profile and must not be published.
+/releng/airootfs/etc/passwd
+/releng/airootfs/etc/shadow

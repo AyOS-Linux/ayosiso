@@ -1,0 +1,123 @@
+# AyOS Material 26.11 — Live-пакеты (Xfce Live-сессия + установщик Calamares)
+# По одному пакету на строку; '#' — комментарии. Все пакеты существуют в репах Arch.
+# === База ===
+base
+linux
+linux-firmware
+mkinitcpio
+mkinitcpio-archiso
+mkinitcpio-nfs-utils
+amd-ucode
+intel-ucode
+base-devel
+nano
+vim
+sudo
+git
+wget
+curl
+# === Сеть ===
+networkmanager
+network-manager-applet
+nm-connection-editor
+wpa_supplicant
+iwd
+wireless-regdb
+# === Bluetooth ===
+# Bluetooth: bluez + bluez-utils + bluez-obex (пакета 'bluetooth' в Arch нет)
+bluez
+bluez-utils
+bluez-obex
+# === Звук / кодеки ===
+pipewire
+pipewire-pulse
+pipewire-alsa
+pipewire-jack
+wireplumber
+gst-plugins-good
+gst-plugins-bad
+gst-plugins-ugly
+gst-libav
+ffmpeg
+gstreamer
+sof-firmware
+alsa-utils
+alsa-firmware
+# === Файловые системы / разметка (нужно Calamares и kpmcore) ===
+btrfs-progs
+dosfstools
+e2fsprogs
+exfatprogs
+f2fs-tools
+jfsutils
+nilfs-utils
+xfsprogs
+# reiserfsprogs удалён из реп Arch (reiserfs deprecated)
+udftools
+parted
+gptfdisk
+ddrescue
+# === UEFI / загрузка ===
+efibootmgr
+edk2-shell
+syslinux
+# === Диагностика / утилиты железа ===
+nvme-cli
+smartmontools
+usbutils
+dmidecode
+lsscsi
+hdparm
+# === KDE Plasma Live-сессия (решение владельца: Live = KDE, не Xfce) ===
+plasma-meta
+konsole
+dolphin
+kate
+sddm
+sddm-kcm
+plasma-nm
+plasma-pa
+discover
+xdg-desktop-portal-kde
+kdegraphics-thumbnailers
+ffmpegthumbs
+gtk3
+gtk4
+xdg-user-dirs
+firefox
+# === Calamares (AUR) + runtime-зависимости из реп Arch ===
+calamares
+os-prober
+qt6-base
+qt6-svg
+qt6-declarative
+qt6-5compat
+yaml-cpp
+kpmcore
+boost-libs
+libpwquality
+kcoreaddons
+# === Драйверы / видео ===
+mesa
+nvidia-open
+nvidia-utils
+nvidia-settings
+vulkan-radeon
+vulkan-intel
+# libva-mesa-driver слит в mesa (VA-API radeonsi/nouveau драйверы внутри mesa)
+# mesa-vdpau слит в mesa (VDPAU входит в mesa с 2023)
+intel-media-driver
+libva-intel-driver
+xf86-video-amdgpu
+# nvidia добавляется динамически (см. customize_airootfs.sh / build-скрипт)
+# === Утилиты Live ===
+fastfetch
+xdg-utils
+polkit
+accountsservice
+xdg-desktop-portal
+xdg-desktop-portal-gtk
+arch-install-scripts
+nbd
+squashfs-tools
+rsync

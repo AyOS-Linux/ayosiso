@@ -1,0 +1,64 @@
+# AyOS Material 26.11 — список опциональных пакетов для страницы
+# «Packages» (netinstall@packages). Отметки пользователя собираются в GS
+# "packageOperations" и ставятся штатным модуляем packages уже в target.
+groups:
+    - name: "Messengers and mail"
+      description: "Telegram, Thunderbird"
+      description[ru]: "Телеграм, Thunderbird"
+      selected: false
+      required: false
+      packages:
+          - telegram-desktop
+          - thunderbird
+    - name: "Browsers"
+      description: "Chromium, Falkon"
+      description[ru]: "Chromium, Falkon"
+      selected: false
+      required: false
+      packages:
+          - chromium
+          - falkon
+    - name: "Media players"
+      description: "VLC, mpv"
+      description[ru]: "VLC, mpv"
+      selected: false
+      required: false
+      packages:
+          - vlc
+          - mpv
+    - name: "Graphics"
+      description: "GIMP, Krita"
+      description[ru]: "GIMP, Krita"
+      selected: false
+      required: false
+      packages:
+          - gimp
+          - krita
+    - name: "Office"
+      description: "LibreOffice (fresh)"
+      description[ru]: "LibreOffice (fresh)"
+      selected: false
+      required: false
+      packages:
+          - libreoffice-fresh
+    - name: "Downloads and torrents"
+      description: "qBittorrent"
+      description[ru]: "qBittorrent"
+      selected: false
+      required: false
+      packages:
+          - qbittorrent
+    - name: "AUR helper"
+      description: "paru (builds and installs package-tree from AUR)"
+      description[ru]: "paru (сборка и установка пакетов из AUR)"
+      selected: false
+      required: false
+      packages:
+          - paru
+    - name: "Recording and streaming"
+      description: "OBS Studio"
+      description[ru]: "OBS Studio"
+      selected: false
+      required: false
+      packages:
+          - obs-studio

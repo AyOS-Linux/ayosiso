@@ -1,0 +1,6 @@
+# AyOS Material 26.11 — dconf-системный дефолт обоев для AyOS Nebula (GNOME).
+# Ставится в target при ayos-edition nebula, затем вызывается dconf update.
+[org/gnome/desktop/background]
+picture-uri='file:///usr/share/backgrounds/ayos/nebula.png'
+picture-uri-dark='file:///usr/share/backgrounds/ayos/nebula.png'
+picture-options='zoom'

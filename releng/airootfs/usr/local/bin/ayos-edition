@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# AyOS Material 26.11 — /usr/local/bin/ayos-edition
+# Вызывается из Calamares (contextualprocess) В CHROOT целевой системы.
+# Устанавливает набор пакетов выбранной редакции через pacman.
+# Запуск в chroot гарантирует shellprocess (dontChroot: false).
+
+set -euo pipefail
+
+EDITION="${1:-}"
+KERNEL="${2:-linux}"
+PACMAN=(pacman --noconfirm --needed)
+
+log() { printf '[ayos-edition] %s\n' "$*"; }
+
+[[ -n "$EDITION" ]] || { echo "usage: ayos-edition <everyday|light|angel|barebone|nebula> <kernel>" >&2; exit 1; }
+
+case "$KERNEL" in
+    linux)       NV=nvidia-open ;;
+    linux-lts)   NV=nvidia-open-lts ;;
+    linux-zen)   NV=nvidia-open-dkms; NVEXTRA=(linux-zen-headers) ;;
+    *)           echo "ayos-edition: unknown kernel '$KERNEL', falling back to linux" >&2
+                 KERNEL=linux; NV=nvidia-open ;;
+esac
+
+# mkarchiso вычищает /boot из airootfs (ядро живёт на ISO9660, не в squashfs),
+# а БД pacman в squashfs помечает linux как установленный, поэтому --needed
+# его пропустит и в цели не будет /boot/vmlinuz-linux. Явно (пере)ставим ядро,
+# если файлов нет. initramfs пересоздаёт модуль initcpio.
+# Перед pacman чиним DNS: /etc/resolv.conf в squashfs — симлинк на
+# /run/systemd/resolve/stub-resolv.conf; без бинда /run в chroot он висит.
+if [[ ! -s /etc/resolv.conf ]]; then
+    if [[ -f /run/systemd/resolve/stub-resolv.conf ]]; then
+        ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+    elif [[ -f /proc/1/root/etc/resolv.conf ]]; then
+        cp -L /proc/1/root/etc/resolv.conf /etc/resolv.conf
+    fi
+fi
+# /etc/pacman.d/gnupg в squashfs нет: mkarchiso зовёт pacstrap с -G («не копировать
+# keyring с хоста»), а pacman-init в цели не запускается. Без keyring pacman
+# не примет подписанные пакеты. archlinux-keyring уже в системе — инициализируем
+# и наполняем ключами офлайн (через /usr/share/pacman/keyrings).
+if [[ ! -s /etc/pacman.d/gnupg/pubring.gpg ]]; then
+    log "Initializing pacman keyring in target..."
+    pacman-key --init
+    pacman-key --populate archlinux
+fi
+# initramfs установленной системы — «дисковой» конфигурации, БЕЗ archiso-хуков:
+# drop-in /etc/mkinitcpio.conf.d/archiso.conf нужен только live-среде (initramfs
+# ищет загрузочный ISO по cmdline), в цели он заставляет загрузку с диска ждать
+# несуществующее ISO-устройство: «ERROR: '' device did not show up after 30s».
+# Основной /etc/mkinitcpio.conf из пакета не содержит строку HOOKS (только
+# комментарии), так что initcpiocfg не может её переписать. Чистим ДО установки
+# ядра: в момент `pacman -Sy linux` libalpm-хук и kernel-install собирают initrd,
+# который kernel-install сразу кладёт на ESP в boot-запись.
+if [[ -f /etc/mkinitcpio.conf.d/archiso.conf ]]; then
+    rm -f /etc/mkinitcpio.conf.d/archiso.conf
+    log "Removed archiso mkinitcpio drop-in from target"
+fi
+if ! grep -q '^HOOKS=' /etc/mkinitcpio.conf; then
+    printf '%s\n' 'HOOKS=(base udev microcode modconf kms keyboard block filesystems fsck)' >> /etc/mkinitcpio.conf
+    log "Wrote plain HOOKS line into /etc/mkinitcpio.conf"
+fi
+case "$KERNEL" in
+    linux)      KIMG=/boot/vmlinuz-linux ;;
+    linux-lts)  KIMG=/boot/vmlinuz-linux-lts ;;
+    linux-zen)  KIMG=/boot/vmlinuz-linux-zen ;;
+esac
+if [[ ! -f "$KIMG" ]]; then
+    log "Target /boot has no $KERNEL; restoring from repositories..."
+    pacman --noconfirm -Sy "$KERNEL"
+fi
+# Общий базис (base + firmware + сеть + аудио + драйверы) ставится модулем
+# ayospacstrap ещё до этого шага; pacman здесь ставит только дельту редакции.
+
+case "$EDITION" in
+  everyday)
+    log "Installing KDE Plasma (Everyday)..."
+    "${PACMAN[@]}" -Sy \
+      plasma-meta \
+      dolphin konsole kate discover \
+      sddm sddm-kcm \
+      plasma-nm plasma-pa \
+      xdg-desktop-portal-kde \
+      firefox kdegraphics-thumbnailers ffmpegthumbs \
+      "$NV" nvidia-settings ${NVEXTRA[@]+"${NVEXTRA[@]}"}
+    systemctl enable sddm.service
+    ;;
+
+  light)
+    log "Installing Xfce (Light)..."
+    "${PACMAN[@]}" -Sy \
+      xfce4 \
+      thunar xfce4-terminal mousepad \
+      lightdm lightdm-gtk-greeter \
+      xdg-desktop-portal-gtk \
+      firefox \
+      "$NV" nvidia-settings ${NVEXTRA[@]+"${NVEXTRA[@]}"}
+    systemctl enable lightdm.service
+    ;;
+
+  angel)
+    log "Angel: niri/quickshell/dotfiles ставит ayos-angelos (shellprocess)."
+    # Здесь только базовые зависимости, без quickshell (AUR, ставится в ayos-angelos
+    # из локальной репы [ayos-local]).
+    "${PACMAN[@]}" -Sy \
+      niri \
+      xwayland-satellite \
+      swaybg swaylock swayidle \
+      xorg-xwayland \
+      fish
+    systemctl enable sddm.service
+    ;;
+
+  barebone)
+    log "Barebone: минимальный серверный базис..."
+    "${PACMAN[@]}" -Sy \
+      networkmanager nano base-devel git \
+      "$KERNEL" linux-firmware
+    systemctl set-default multi-user.target
+    ;;
+
+  nebula)
+    log "Installing GNOME (Nebula)..."
+    "${PACMAN[@]}" -Sy \
+      gnome \
+      nautilus gnome-terminal gedit gnome-software \
+      gdm \
+      xdg-desktop-portal-gnome \
+      firefox \
+      "$NV" nvidia-settings ${NVEXTRA[@]+"${NVEXTRA[@]}"}
+    systemctl enable gdm.service
+    ;;
+
+  *)
+    echo "ayos-edition: unknown edition '$EDITION'" >&2
+    exit 1
+    ;;
+esac
+
+# После установки редакции: удалить Live-специфичные пакеты из целевой системы.
+# Calamares пакеты ставит в chroot; Live-утилиты убираем, если они не нужны.
+# (Не критично: pacman -Rns --nd в chroot не трогает зависимости.)
+log "edition '$EDITION' done."
+exit 0

@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# AyOS Material 26.11 — /usr/local/bin/ayos-angelos
+# Вызывается из Calamares (shellprocess ayos_angelos) В CHROOT целевой системы.
+#
+# Логика (§5.6):
+#   1. Переменные Calamares: редакция ($1) + username ($2).
+#      Locale/timezone уже применены модулями locale/localecfg — читаем из
+#      /etc/locale.conf и /etc/localtime целевой системы.
+#   2. Если редакция не angel — тихий выход (модуль вызывается всегда).
+#   3. Пакеты niri/quickshell: из официального репозитория Arch [extra].
+#   4. AngelOS-Dotfiles: клонировать и запустить install.sh НЕинтерактивно
+#      от имени созданного пользователя с env-переменными.
+#   5. Никаких зависаний: INTERACTIVE=0, SKIP_PACKAGES=1, все данные через env.
+#
+# Проверено по исходникам AngelOS-Dotfiles (install.sh, installer/steps/*):
+#   - check_distro: с SKIP_PACKAGES=1 AyOS (ID=ayos) даёт warning и продолжается
+#   - шаг 30-packages при SKIP_PACKAGES=1 пропускается целиком (вкл. cachyos-repos)
+#   - при INTERACTIVE=0 root-чек и языковое меню не срабатывают
+
+set -euo pipefail
+
+EDITION="${1:-}"
+AYOS_USER="${2:-}"
+
+log() { printf '[ayos-angelos] %s\n' "$*"; }
+
+if [[ "$EDITION" != "angel" ]]; then
+  log "edition '$EDITION' != angel — nothing to do."
+  exit 0
+fi
+
+[[ -n "$AYOS_USER" ]] || { echo "ayos-angelos: no username from Calamares" >&2; exit 1; }
+id "$AYOS_USER" &>/dev/null || { echo "ayos-angelos: user '$AYOS_USER' does not exist" >&2; exit 1; }
+
+USER_HOME="$(getent passwd "$AYOS_USER" | cut -d: -f6)"
+[[ -n "$USER_HOME" && -d "$USER_HOME" ]] || { echo "ayos-angelos: home of '$AYOS_USER' not found" >&2; exit 1; }
+
+# ── 1. Locale/timezone из целевой системы (уже установлены Calamares) ──
+LOCALE="en_US"
+[[ -f /etc/locale.conf ]] && LOCALE="$(sed -n 's/^LANG=//p' /etc/locale.conf | head -1)"
+LOCALE="${LOCALE:-en_US}"
+LOCALE="${LOCALE%.UTF-8}"; LOCALE="${LOCALE%%.*}"
+TZ="UTC"
+[[ -f /etc/localtime ]] && TZ="$(readlink -f /etc/localtime | sed 's|.*/zoneinfo/||')"
+log "locale=$LOCALE tz=$TZ user=$AYOS_USER home=$USER_HOME"
+
+# Раскладка по locale (первичная; пользователь донастроит в niri)
+KB_LAYOUT="us"
+case "$LOCALE" in
+  ru*) KB_LAYOUT="us,ru" ;;
+esac
+ANGELOS_LANG="en"
+[[ "$LOCALE" == ru* ]] && ANGELOS_LANG="ru"
+
+# ── 2. Пакеты: niri стоит из [extra] (ayos-edition); здесь — quickshell ([extra]) и зависимости ──
+log "installing quickshell (extra) and session deps..."
+pacman -Sy --noconfirm --needed quickshell fish xdg-desktop-portal-gtk || \
+  log "WARN: some packages failed; continuing with dotfiles anyway"
+
+# ── 3. Dotfiles: клонировать и запустить неинтерактивно от имени пользователя ──
+DOTFILES_DIR="$USER_HOME/.cache/ayos-angelos-dotfiles"
+log "cloning AngelOS-Dotfiles..."
+runuser -u "$AYOS_USER" -- mkdir -p "$(dirname "$DOTFILES_DIR")"
+runuser -u "$AYOS_USER" -- git clone --depth 1 https://github.com/MixaDoDs/AngelOS-Dotfiles.git "$DOTFILES_DIR"
+
+log "running AngelOS install.sh unattended..."
+# Ключевые env (проверено по install.sh и installer/steps/*):
+#   INTERACTIVE=0        — никаких вопросов (root-чек и языковое меню обходятся)
+#   NO_TUI=1             — запасной вариант, если где-то останется prompt
+#   SKIP_PACKAGES=1      — pacman-шаг пропускается: пакеты ставим сами (п.2);
+#                          заодно обходит cachyos-repos.sh и жёсткий чек дистрибутива
+#                          (AyOS не Arch/CachyOS → только warning, не die)
+#   FOLLOW_SYSTEM=0      — не «догонять» систему до авторской (мы не CachyOS)
+#   DOTFILES_MODE=full   — полный rice
+#   INSTALL_APPS=0       — без авторских приложений (Calamares-установка минимальна)
+#   INSTALL_GAMING=0     — без Steam/Proton
+#   INSTALL_WALLPAPERS=0 — без скачивания ~800MB обоев (wallpaper из бренд-пака уже стоит)
+#   INSTALL_VOXTYPE=0 / DOWNLOAD_VOXTYPE_MODEL=0 — без голосового ввода
+#   INSTALL_SDDM=0       — дисплей-менеджер не трогаем (niri стартует из TTY/своего DM)
+#   ENABLE_SERVICES=1    — systemd user services (systemctl --user; в chroot тихо отклонится)
+#   KB_LAYOUTS           — из locale
+#   HOME_DIR берётся из $HOME при runuser-запуске
+chown -R "$AYOS_USER:$AYOS_USER" "$DOTFILES_DIR"
+runuser -u "$AYOS_USER" -- env \
+  HOME="$USER_HOME" \
+  INTERACTIVE=0 \
+  NO_TUI=1 \
+  SKIP_PACKAGES=1 \
+  FOLLOW_SYSTEM=0 \
+  DOTFILES_MODE=full \
+  INSTALL_APPS=0 \
+  INSTALL_GAMING=0 \
+  INSTALL_WALLPAPERS=0 \
+  INSTALL_VOXTYPE=0 \
+  DOWNLOAD_VOXTYPE_MODEL=0 \
+  INSTALL_SDDM=0 \
+  INSTALL_FLATPAK=0 \
+  ENABLE_SERVICES=1 \
+  CACHYOS_REPOS=0 \
+  TZ="$TZ" \
+  AYOS_TIMEZONE="$TZ" \
+  KB_LAYOUTS="$KB_LAYOUT" \
+  ANGELOS_THEME=pixel \
+  ANGELOS_LANG="$ANGELOS_LANG" \
+  DOTFILES_STAMP="20261025-000000" \
+  VALIDATE_NIRI=0 \
+  bash "$DOTFILES_DIR/install.sh"
+log "AngelOS install.sh finished."
+
+# ── 4. Пост-настройка сессии Angel ─────────────────────────────────
+# 4.1. Niri как сессия входа: desktop-файл уже даёт пакет niri (niri.desktop).
+# 4.2. Автовход не настраиваем — пользователь входит сам.
+# 4.3. Группы для Wayland/niri
+usermod -aG video,input "$AYOS_USER" 2>/dev/null || true
+
+log "done. Angel edition configured for user '$AYOS_USER'."
+exit 0

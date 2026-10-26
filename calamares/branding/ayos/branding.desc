@@ -1,0 +1,28 @@
+# AyOS Material 26.11 — branding.desc
+# Формат сверен с официальным примером (src/branding/default/branding.desc, v3.3.14)
+---
+componentName:  ayos
+
+strings:
+    componentName:         ayos
+    shortVersion:          26.11
+    versionedName:         AyOS 26.11
+    shortVersionedName:    AyOS 26.11
+    bootloaderEntryName:   AyOS
+
+images:
+    productLogo:           "ayone-mark-512.png"
+    productIcon:           "ayone-mark-256.png"
+    productWelcome:        "wallpaper.png"
+
+slideshow:               "show.qml"
+slideshowAPI:            2
+
+style:
+    SidebarBackground:        "#292f34"
+    SidebarText:              "#ffffff"
+    SidebarTextCurrent:       "#292f34"
+    SidebarBackgroundCurrent: "#e88b2a"
+
+sidebar: widget,left
+navigation: widget,bottom

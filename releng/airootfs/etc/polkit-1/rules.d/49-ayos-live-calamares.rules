@@ -1,0 +1,8 @@
+// AyOS Live: liveuser запускает Calamares через pkexec без пароля
+polkit.addRule(function(action, subject) {
+    if (subject.user == "liveuser" &&
+        action.id == "org.freedesktop.policykit.exec" &&
+        action.lookup("program") == "/usr/bin/calamares") {
+        return polkit.Result.YES;
+    }
+});

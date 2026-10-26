@@ -1,0 +1,6 @@
+[Containments][1]
+WallpaperPlugin=org.kde.image
+
+[Containments][1][Wallpaper][org.kde.image][General]
+Image=file:///usr/share/backgrounds/ayos/everyday.png
+SlidePaths=/usr/share/backgrounds/ayos/
