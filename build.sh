@@ -159,10 +159,23 @@ build_iso() {
     sudo rm -rf "$AYOS_DIR/work" "$AYOS_DIR/out"
   fi
   mkdir -p work out
+  # Кэш пакетов: mkarchiso работает без root (pacstrap -N), системный
+  # /var/cache/pacman/pkg ему не записать — pacman пишет warning
+  # "couldn't find or create package cache, using /tmp/" и теряет скачанное
+  # при прерывании/ребуте (это tmpfs). mkarchiso сохраняет профильный CacheDir
+  # (_make_pacman_conf), поэтому даём постоянный пользовательский каталог:
+  # докачанные пакеты переживают прерванные запуски.
+  local pkg_cache="${AYOS_PKG_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/ayos/pacman}"
+  local iso_pacman_conf="$pkg_cache/iso.pacman.conf"
+  mkdir -p "$pkg_cache"
+  sed 's|^\[options\]$|[options]\nCacheDir = '"$pkg_cache"'|' \
+      "$AYOS_DIR/releng/pacman.conf" > "$iso_pacman_conf"
+  grep -qF "CacheDir = $pkg_cache" "$iso_pacman_conf" \
+    || die "failed to set CacheDir in $iso_pacman_conf"
   # mkarchiso сам выполняет customize_airootfs.sh в chroot
   local log_start
   log_start=$(wc -l < "$LOG")
-  mkarchiso -v -w "$AYOS_DIR/work" -o "$AYOS_DIR/out" "$AYOS_DIR/releng" 2>&1 | tee -a "$LOG"
+  mkarchiso -v -C "$iso_pacman_conf" -w "$AYOS_DIR/work" -o "$AYOS_DIR/out" "$AYOS_DIR/releng" 2>&1 | tee -a "$LOG"
   if sed -n "$((log_start + 1)),\$p" "$LOG" | grep -Eq 'ERROR: binary not found|Failed to install packages|errors were encountered during the build'; then
     die "mkarchiso log contains a package/initramfs error; do not use this ISO"
   fi
