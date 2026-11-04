@@ -21,7 +21,7 @@ unset LD_PRELOAD LD_AUDIT XDG_CURRENT_DESKTOP QT_QPA_PLATFORMTHEME 2>/dev/null |
 AYOS_DIR="${AYOS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 REPO_DIR="$AYOS_DIR/repo"                     # staging AUR-пакетов
 CHROOT_DIR="$AYOS_DIR/chroot"                 # изолированное chroot-окружение сборки
-LOCAL_REPO="/opt/ayos-local-repo"             # финальная репа (нужен luts для записи)
+LOCAL_REPO="/opt/ayos-local-repo"             # финальная репа (нужен sudo для записи)
 # AUR-пакеты: только calamares (в официальных репах Arch его НЕТ).
 AUR_PKGS=(calamares)
 LOG="$AYOS_DIR/build.log"
@@ -102,11 +102,11 @@ build_repo() {
     log "calamares pinned to 3.4.3 (AUR ships 3.4.2)"
   fi
 
-  # Chroot devtools: <CHROOT_DIR>/root создаётся mkarchroot (нужен luts)
+  # Chroot devtools: <CHROOT_DIR>/root создаётся mkarchroot (нужен sudo)
   if [[ ! -d "$CHROOT_DIR/root" ]]; then
-    log "creating build chroot at $CHROOT_DIR/root (requires luts)..."
-    luts mkdir -p "$CHROOT_DIR"
-    luts mkarchroot "$CHROOT_DIR/root" base-devel git
+    log "creating build chroot at $CHROOT_DIR/root (requires sudo)..."
+    sudo mkdir -p "$CHROOT_DIR"
+    sudo mkarchroot "$CHROOT_DIR/root" base-devel git
   fi
 
   # Ускорение/разгрузка сборки (§4): MAKEFLAGS настраивается в chroot-копии makepkg.conf.
@@ -114,7 +114,7 @@ build_repo() {
   # По умолчанию — половина ядер: ноутбук не «страдает» и остаётся отзывчивым.
   JOBS="${JOBS:-$(( $(nproc) / 2 ))}"
   if [[ -f "$CHROOT_DIR/root/etc/makepkg.conf" ]]; then
-    luts sed -i "s/^#\?MAKEFLAGS=.*/MAKEFLAGS=\"-j${JOBS}\"/" "$CHROOT_DIR/root/etc/makepkg.conf"
+    sudo sed -i "s/^#\?MAKEFLAGS=.*/MAKEFLAGS=\"-j${JOBS}\"/" "$CHROOT_DIR/root/etc/makepkg.conf"
     log "MAKEFLAGS=-j${JOBS} applied to chroot makepkg.conf"
   fi
 
@@ -133,15 +133,15 @@ build_repo() {
     find "$REPO_DIR/$p" -maxdepth 1 -name "${p}-*.pkg.tar.zst" \
          ! -name "${p}-${wantver}-*.pkg.tar.zst" -delete
     log "building $p $wantver in chroot (-j${JOBS}, nice 10)..."
-    ( cd "$REPO_DIR/$p" && luts nice -n 10 ionice -c3 makechrootpkg -c -r "$CHROOT_DIR" ) || die "makechrootpkg failed for $p"
+    ( cd "$REPO_DIR/$p" && sudo nice -n 10 ionice -c3 makechrootpkg -c -r "$CHROOT_DIR" ) || die "makechrootpkg failed for $p"
     [[ -n $(find "$REPO_DIR/$p" -maxdepth 1 -name '*.pkg.tar.zst' | head -1) ]] || die "$p: no package built"
   done
 
-  # Публикация в локальную репу (нужен luts — файлы вне ~/AyOS)
+  # Публикация в локальную репу (нужен sudo — каталог вне рабочего дерева)
   log "publishing packages to $LOCAL_REPO..."
-  luts mkdir -p "$LOCAL_REPO"
-  find "$REPO_DIR" -maxdepth 2 -name '*.pkg.tar.zst' ! -name '*-debug-*' -exec luts cp -t "$LOCAL_REPO" {} +
-  luts repo-add "$LOCAL_REPO/ayos-local.db.tar.gz" "$LOCAL_REPO"/*.pkg.tar.zst
+  sudo mkdir -p "$LOCAL_REPO"
+  find "$REPO_DIR" -maxdepth 2 -name '*.pkg.tar.zst' ! -name '*-debug-*' -exec sudo cp -t "$LOCAL_REPO" {} +
+  sudo repo-add "$LOCAL_REPO/ayos-local.db.tar.gz" "$LOCAL_REPO"/*.pkg.tar.zst
 
   log "repo stage done:"
   ls -la "$LOCAL_REPO" | tee -a "$LOG"
@@ -154,9 +154,9 @@ build_iso() {
   sync_calamares_config
   cd "$AYOS_DIR"
   # work-каталог прошлой сборки содержит root-владельческие файлы (pacstrap),
-  # поэтому чистим через luts. Разрушительное действие: каталоги сборки AyOS.
+  # поэтому чистим через sudo. Разрушительное действие: каталоги сборки AyOS.
   if [[ -d work || -d out ]]; then
-    luts rm -rf "$AYOS_DIR/work" "$AYOS_DIR/out"
+    sudo rm -rf "$AYOS_DIR/work" "$AYOS_DIR/out"
   fi
   mkdir -p work out
   # mkarchiso сам выполняет customize_airootfs.sh в chroot
@@ -180,7 +180,7 @@ case "${1:-all}" in
   clean)
         echo "Удалить $AYOS_DIR/work и $AYOS_DIR/out? [y/N]"
         read -r answer
-        [[ "$answer" == "y" ]] && { luts rm -rf "$AYOS_DIR/work" "$AYOS_DIR/out"; echo "cleaned"; }
+        [[ "$answer" == "y" ]] && { sudo rm -rf "$AYOS_DIR/work" "$AYOS_DIR/out"; echo "cleaned"; }
         ;;
   *)    echo "usage: $0 {repo|iso|all|clean}" >&2; exit 1 ;;
 esac
