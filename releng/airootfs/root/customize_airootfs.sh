@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AyOS Material 26.11 — customize_airootfs.sh
+# AyOS Material 26.2 — customize_airootfs.sh
 # Выполняется mkarchiso в chroot airootfs после pacstrap.
 # Задачи: os-release AyOS (Live), motd, сервисы Live.
 
@@ -13,18 +13,17 @@ log() { printf '[AyOS-customize] %s\n' "$*" ; }
 log "restoring exec bits on ayos helpers"
 chmod 0755 \
   /usr/local/bin/ayos-edition \
-  /usr/local/bin/ayos-osrelease \
-  /usr/local/bin/ayos-angelos
+  /usr/local/bin/ayos-osrelease
 
 # ── 1. os-release AyOS (Live) ──────────────────────────────────────
 # Финальный PRETTY_NAME по редакции задаётся post-install скриптом Calamares.
 log "writing /etc/os-release"
 cat > /etc/os-release <<'EOF'
 NAME="AyOS"
-PRETTY_NAME="AyOS v26.11 (Live)"
+PRETTY_NAME="AyOS v26.2 (Live)"
 ID=ayos
 ID_LIKE=arch
-BUILD_ID=26.11
+BUILD_ID=26.2
 VARIANT_ID=live-kde
 VARIANT="Live (KDE Plasma)"
 HOME_URL="https://github.com/AyOS-Linux/ayosiso"
@@ -58,7 +57,7 @@ fi
 # ── 3. motd AyOS вместо Arch-справки ──────────────────────────────
 log "writing /etc/motd"
 cat > /etc/motd <<'EOF'
-AyOS Material 26.11 — Live medium (KDE Plasma)
+AyOS Material 26.2 — Live medium (KDE Plasma)
 
   Calamares установлен. Запуск установщика: ярлык "Install System" (pkexec)
   или из терминала: sudo calamares

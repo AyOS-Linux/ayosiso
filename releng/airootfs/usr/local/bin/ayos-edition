@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AyOS Material 26.11 — /usr/local/bin/ayos-edition
+# AyOS Material 26.2 — /usr/local/bin/ayos-edition
 # Вызывается из Calamares (contextualprocess) В CHROOT целевой системы.
 # Устанавливает набор пакетов выбранной редакции через pacman.
 # Запуск в chroot гарантирует shellprocess (dontChroot: false).
@@ -12,7 +12,7 @@ PACMAN=(pacman --noconfirm --needed)
 
 log() { printf '[ayos-edition] %s\n' "$*"; }
 
-[[ -n "$EDITION" ]] || { echo "usage: ayos-edition <everyday|light|angel|barebone|nebula> <kernel>" >&2; exit 1; }
+[[ -n "$EDITION" ]] || { echo "usage: ayos-edition <everyday|light|barebone|nebula> [kernel]" >&2; exit 1; }
 
 case "$KERNEL" in
     linux)       NV=nvidia-open ;;
@@ -96,19 +96,6 @@ case "$EDITION" in
       firefox \
       "$NV" nvidia-settings ${NVEXTRA[@]+"${NVEXTRA[@]}"}
     systemctl enable lightdm.service
-    ;;
-
-  angel)
-    log "Angel: niri/quickshell/dotfiles ставит ayos-angelos (shellprocess)."
-    # Здесь только базовые зависимости, без quickshell (AUR, ставится в ayos-angelos
-    # из локальной репы [ayos-local]).
-    "${PACMAN[@]}" -Sy \
-      niri \
-      xwayland-satellite \
-      swaybg swaylock swayidle \
-      xorg-xwayland \
-      fish
-    systemctl enable sddm.service
     ;;
 
   barebone)

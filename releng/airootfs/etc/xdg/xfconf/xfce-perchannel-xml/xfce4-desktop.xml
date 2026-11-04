@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- AyOS Material 26.11 - дефолтные обои AyOS Light (Xfce):
+<!-- AyOS Material 26.2 - дефолтные обои AyOS Light (Xfce):
      monitor0/workspace0 - обобщённый дефолт, реальные мониторы подхватят. -->
 <channel name="xfce4-desktop" version="1.0">
   <property name="backdrop" type="empty">

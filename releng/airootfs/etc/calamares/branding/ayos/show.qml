@@ -1,4 +1,4 @@
-// AyOS Material 26.11 — слайдшоу Calamares (slideshowAPI: 2)
+// AyOS Material 26.2 — слайдшоу Calamares (slideshowAPI: 2)
 // Одна страница: бренд-обои + название. Load-on-start API.
 import QtQuick 2.0;
 import calamares.slideshow 1.0;

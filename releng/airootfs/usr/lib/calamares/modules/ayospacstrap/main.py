@@ -1,4 +1,4 @@
-# AyOS Material 26.11 — ayospacstrap/main.py
+# AyOS Material 26.2 — ayospacstrap/main.py
 #
 # Честная установка: pacstrap свежей базовой системы из репозиториев
 # в примонтированный target. Выполняется на стороне live (pacstrap требует
@@ -138,13 +138,13 @@ def run():
     os.chmod(sudoers_file, 0o440)
 
     # Chroot-модули Calamares (shellprocess@ayos_osrelease и
-    # contextualprocess -> ayos-edition, ayos_angelos) исполняют AyOS-хелперы
+    # contextualprocess -> ayos-edition) исполняют AyOS-хелперы
     # ВНУТРИ цели (у них dontChroot: false). pacstrap приносит только
     # репозиторные пакеты, поэтому доставляем хелперы в цель руками:
     # исходники - это работающий live-корень (мы в host-контексте).
     helpers_dir = os.path.join(root, "usr", "local", "bin")
     os.makedirs(helpers_dir, exist_ok=True)
-    for name in ("ayos-osrelease", "ayos-edition", "ayos-angelos"):
+    for name in ("ayos-osrelease", "ayos-edition"):
         src = os.path.join("/usr/local/bin", name)
         if os.path.isfile(src):
             dst = os.path.join(helpers_dir, name)

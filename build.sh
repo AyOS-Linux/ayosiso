@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# AyOS Material 26.11 — build.sh
+# AyOS Material 26.2 — build.sh
 # Полный цикл: (0) проверка окружения, (1) сборка AUR-пакетов в изолированном
 # chroot -> /opt/ayos-local-repo, (2) mkarchiso, (3) отчёт.
-# Хост не загрязняется: все сборки в chroot; лог в ~/AyOS/build.log.
+# Хост не загрязняется: все сборки в chroot; лог в build.log рядом со скриптом.
 #
 # Использование:
 #   ./build.sh repo      — опубликовать уже собранный Calamares в локальную репу
@@ -12,16 +12,17 @@
 
 set -euo pipefail
 
-# Чистое окружение для сборки: хост-десктоп-переменные (LD_PRELOAD AngelOS и т.п.)
+# Чистое окружение для сборки: хост-десктоп-переменные (LD_PRELOAD и т.п.)
 # не должны протекать в pacstrap/mkarchiso/chroot-процессы.
 unset LD_PRELOAD LD_AUDIT XDG_CURRENT_DESKTOP QT_QPA_PLATFORMTHEME 2>/dev/null || true
 
-AYOS_DIR="$HOME/AyOS"
+# Каталог репозитория = место, где лежит сам build.sh (работает и в ~/AyOS,
+# и в ~/ayosiso; переопределить можно переменной окружения AYOS_DIR=...)
+AYOS_DIR="${AYOS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 REPO_DIR="$AYOS_DIR/repo"                     # staging AUR-пакетов
 CHROOT_DIR="$AYOS_DIR/chroot"                 # изолированное chroot-окружение сборки
 LOCAL_REPO="/opt/ayos-local-repo"             # финальная репа (нужен luts для записи)
 # AUR-пакеты: только calamares (в официальных репах Arch его НЕТ).
-# quickshell и niri теперь в [extra] — AUR-сборка не нужна.
 AUR_PKGS=(calamares)
 LOG="$AYOS_DIR/build.log"
 
@@ -88,6 +89,17 @@ build_repo() {
     sed -i '/^[[:space:]]*packagechooser[[:space:]]*$/d' "$REPO_DIR/calamares/PKGBUILD"
     grep -q 'packagechooser' "$REPO_DIR/calamares/PKGBUILD" || \
       die "Calamares PKGBUILD does not enable packagechooser"
+
+    # AUR отстаёт от upstream: там всё ещё 3.4.2, а в 3.4.3 починен
+    # partition-модуль (выравнивание границ разделов под 4K в РУЧНОЙ разметке,
+    # issue #2526; плюс фикс GPT-флага). Поднимаем pkgver/pkgrel и чекsum
+    # release-тарболла; source в PKGBUILD собран из $pkgver, URL трогать не надо.
+    local calamares_pb="$REPO_DIR/calamares/PKGBUILD"
+    sed -i 's/^pkgver=.*/pkgver=3.4.3/'  "$calamares_pb"
+    sed -i 's/^pkgrel=.*/pkgrel=1/'      "$calamares_pb"
+    sed -i "s/^sha256sums=.*/sha256sums=('144cbbf6bdcebfb21685950db4f0777218519df095f62f4aa392f28348110d18')/" "$calamares_pb"
+    grep -q '^pkgver=3.4.3$' "$calamares_pb" || die "failed to pin calamares pkgver=3.4.3"
+    log "calamares pinned to 3.4.3 (AUR ships 3.4.2)"
   fi
 
   # Chroot devtools: <CHROOT_DIR>/root создаётся mkarchroot (нужен luts)
@@ -109,12 +121,18 @@ build_repo() {
   # makechrootpkg запускается ИЗ каталога с PKGBUILD;
   # nice/ionice — сборка не мешает работе десктопа; -c: чистая копия chroot.
   for p in "${AUR_PKGS[@]}"; do
-    # пропускаем уже собранные (calamares уже готов — не пересобираем)
-    if find "$REPO_DIR/$p" -maxdepth 1 -name '*.pkg.tar.zst' | grep -q .; then
-      log "$p: package already built, skipping"
+    # Пропускаем только уже собранный пакет ТЕКУЩЕЙ версии из PKGBUILD:
+    # лежащий рядом .pkg.tar.zst другой версии (например, 3.4.2 при пине 3.4.3)
+    # не должен ни блокировать пересборку, ни уехать в локальную репу.
+    local wantver
+    wantver="$(sed -n 's/^pkgver=//p' "$REPO_DIR/$p/PKGBUILD" | head -1)"
+    if find "$REPO_DIR/$p" -maxdepth 1 -name "${p}-${wantver}-*.pkg.tar.zst" | grep -q .; then
+      log "$p: package $wantver already built, skipping"
       continue
     fi
-    log "building $p in chroot (-j${JOBS}, nice 10)..."
+    find "$REPO_DIR/$p" -maxdepth 1 -name "${p}-*.pkg.tar.zst" \
+         ! -name "${p}-${wantver}-*.pkg.tar.zst" -delete
+    log "building $p $wantver in chroot (-j${JOBS}, nice 10)..."
     ( cd "$REPO_DIR/$p" && luts nice -n 10 ionice -c3 makechrootpkg -c -r "$CHROOT_DIR" ) || die "makechrootpkg failed for $p"
     [[ -n $(find "$REPO_DIR/$p" -maxdepth 1 -name '*.pkg.tar.zst' | head -1) ]] || die "$p: no package built"
   done
@@ -148,7 +166,7 @@ build_iso() {
   if sed -n "$((log_start + 1)),\$p" "$LOG" | grep -Eq 'ERROR: binary not found|Failed to install packages|errors were encountered during the build'; then
     die "mkarchiso log contains a package/initramfs error; do not use this ISO"
   fi
-  local iso="$AYOS_DIR/out/ayos-26.11-x86_64.iso"
+  local iso="$AYOS_DIR/out/ayos-26.2-x86_64.iso"
   [[ -s "$iso" ]] || die "mkarchiso did not produce a non-empty ISO (pacstrap/customize may have failed)"
   file "$iso" | grep -q 'ISO 9660' || die "output is not a valid ISO 9660 image: $iso"
   log "ISO built:"
@@ -160,7 +178,7 @@ case "${1:-all}" in
   iso)  build_iso ;;
   all)  require_host_tools; build_repo; build_iso ;;
   clean)
-        echo "Удалить ~/AyOS/work и ~/AyOS/out? [y/N]"
+        echo "Удалить $AYOS_DIR/work и $AYOS_DIR/out? [y/N]"
         read -r answer
         [[ "$answer" == "y" ]] && { luts rm -rf "$AYOS_DIR/work" "$AYOS_DIR/out"; echo "cleaned"; }
         ;;

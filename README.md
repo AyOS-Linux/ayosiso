@@ -1,13 +1,13 @@
-# AyOS Material 26.11
+# AyOS Material 26.2
 
 AyOS is an Arch Linux-based x86_64 distribution project. This repository contains the `archiso` profile, Calamares configuration, branding assets, and build/test scripts.
 
 ## Current scope
 
 - Live installer desktop: KDE Plasma, SDDM, NetworkManager, PipeWire, codecs, and Calamares.
-- Calamares edition chooser: Everyday (Plasma), Light (Xfce), Angel (niri + AngelOS dotfiles), Barebone (TTY), and Nebula (GNOME).
+- Calamares edition chooser: Everyday (Plasma), Light (Xfce), Nebula (GNOME), and Barebone (TTY).
 - UEFI systemd-boot installation; Secure Boot is not configured.
-- Release identity: AyOS Material 26.11.
+- Release identity: AyOS Material 26.2.
 - No telemetry is included.
 
 ## Build

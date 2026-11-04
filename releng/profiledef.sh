@@ -5,7 +5,7 @@ iso_name="ayos"
 iso_label="AYOS_$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)"
 iso_publisher="AyOS <https://github.com/AyOS-Linux/ayosiso>"
 iso_application="AyOS Material Live Media"
-iso_version="26.11"
+iso_version="26.2"
 install_dir="ayos"
 bootmodes=('bios.syslinux'
            'uefi.systemd-boot')

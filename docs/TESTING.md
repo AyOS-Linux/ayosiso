@@ -8,7 +8,7 @@ Run all installation tests in disposable QEMU VMs. Do not test Calamares by inst
 - SDDM automatically logs into `liveuser` without a password.
 - KDE Plasma starts, AyOS wallpaper appears, and the Calamares launcher opens.
 - NetworkManager, Bluetooth, PipeWire, and fastfetch work.
-- Calamares starts without initialization/module errors and shows all five editions.
+- Calamares starts without initialization/module errors and shows all four editions.
 
 ## Edition install matrix
 
@@ -18,7 +18,6 @@ For every edition, use the disposable `ayos-test.qcow2` disk and verify installa
 |---|---|
 | Everyday | Plasma, Dolphin, Konsole, Kate, Discover, SDDM |
 | Light | Xfce, Thunar, xfce4-terminal, Mousepad, LightDM |
-| Angel | niri session, Quickshell and AngelOS dotfiles installed noninteractively for the Calamares user |
 | Barebone | TTY default target, NetworkManager, nano, base-devel, git |
 | Nebula | GNOME, Nautilus, GNOME Terminal, Gedit, GNOME Software, GDM |
 

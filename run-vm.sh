@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AyOS Material 26.11 — run-vm.sh
+# AyOS Material 26.2 — run-vm.sh
 # Запуск тестовой виртуалки: UEFI (OVMF), KVM, 4G RAM, наш ISO, qcow2-диск.
 #
 # Использование:
@@ -8,9 +8,12 @@
 #   ./run-vm.sh uefi-shell   — встроенный UEFI Shell (проверка ESP)
 
 set -euo pipefail
-cd "$HOME/AyOS"
+# Каталог репозитория = место, где лежит сам скрипт (работает и в ~/AyOS,
+# и в ~/ayosiso; переопределить можно переменной окружения AYOS_DIR=...)
+AYOS_DIR="${AYOS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+cd "$AYOS_DIR"
 
-ISO="out/ayos-26.11-x86_64.iso"
+ISO="out/ayos-26.2-x86_64.iso"
 DISK="ayos-test.qcow2"
 OVMF_DIR="/usr/share/edk2/x64"
 

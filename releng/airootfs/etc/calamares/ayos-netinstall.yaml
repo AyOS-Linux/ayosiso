@@ -1,4 +1,4 @@
-# AyOS Material 26.11 — список опциональных пакетов для страницы
+# AyOS Material 26.2 — список опциональных пакетов для страницы
 # «Packages» (netinstall@packages). Отметки пользователя собираются в GS
 # "packageOperations" и ставятся штатным модуляем packages уже в target.
 groups:

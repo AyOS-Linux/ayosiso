@@ -1,13 +1,13 @@
-# AyOS Material 26.11 — branding.desc
+# AyOS Material 26.2 — branding.desc
 # Формат сверен с официальным примером (src/branding/default/branding.desc, v3.3.14)
 ---
 componentName:  ayos
 
 strings:
     componentName:         ayos
-    shortVersion:          26.11
-    versionedName:         AyOS 26.11
-    shortVersionedName:    AyOS 26.11
+    shortVersion:          26.2
+    versionedName:         AyOS 26.2
+    shortVersionedName:    AyOS 26.2
     bootloaderEntryName:   AyOS
 
 images:
