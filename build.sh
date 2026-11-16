@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# AyOS Material 26.2 — build.sh
-# Полный цикл: (0) проверка окружения, (1) сборка AUR-пакетов в изолированном
-# chroot -> /opt/ayos-local-repo, (2) mkarchiso, (3) отчёт.
-# Хост не загрязняется: все сборки в chroot; лог в build.log рядом со скриптом.
+# AyOS Stuff 26.3 — build.sh
+# Сборка ISO через mkarchiso. Установщик приходит готовым пакетом ayder из
+# репозитория AyOS (https://ayos-linux.github.io/repo/x86_64): он уже содержит
+# Calamares, собранный в облаке репозитория, и пак оформления (branding ayder).
+# Локальная сборка Calamares в chroot (старая стадия repo, /opt/ayos-local-repo)
+# удалена вместе с «Local-Calamares Installer».
 #
 # Использование:
-#   ./build.sh repo      — опубликовать уже собранный Calamares в локальную репу
-#   ./build.sh iso       — собрать ISO (требует готовой репы)
-#   ./build.sh all       — repo + iso
-#   ./build.sh clean     — удалить work-директорию (запрашивает подтверждение)
+#   ./build.sh iso      — собрать ISO (то же, что ./build.sh all)
+#   ./build.sh clean    — удалить work/ и out/ (спрашивает подтверждение)
 
 set -euo pipefail
 
@@ -19,146 +19,58 @@ unset LD_PRELOAD LD_AUDIT XDG_CURRENT_DESKTOP QT_QPA_PLATFORMTHEME 2>/dev/null |
 # Каталог репозитория = место, где лежит сам build.sh (работает и в ~/AyOS,
 # и в ~/ayosiso; переопределить можно переменной окружения AYOS_DIR=...)
 AYOS_DIR="${AYOS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
-REPO_DIR="$AYOS_DIR/repo"                     # staging AUR-пакетов
-CHROOT_DIR="$AYOS_DIR/chroot"                 # изолированное chroot-окружение сборки
-LOCAL_REPO="/opt/ayos-local-repo"             # финальная репа (нужен sudo для записи)
-# AUR-пакеты: только calamares (в официальных репах Arch его НЕТ).
-AUR_PKGS=(calamares)
 LOG="$AYOS_DIR/build.log"
+AYOS_REPO_URL="https://ayos-linux.github.io/repo/x86_64"
 
 log() { printf '[build] %s\n' "$*" | tee -a "$LOG"; }
 die() { printf '[build] FATAL: %s\n' "$*" | tee -a "$LOG" >&2; exit 1; }
 
+# Имя/версия ISO читаются из profiledef.sh — источник истины один.
+# Вывод: первая строка iso_name, вторая — iso_version.
+# ВАЖНО: file_permissions надо заранее объявить ассоциативным (как это делает
+# mkarchiso: `declare -A file_permissions=()`), иначе bash трактует
+# ["/etc/shadow"]="0:0:400" как арифметический индекс и sourcing падает с
+# "arithmetic syntax error", не дойдя до printf.
+iso_meta() {
+  (
+    declare -A file_permissions=()
+    # shellcheck disable=SC1091
+    source "$AYOS_DIR/releng/profiledef.sh"
+    printf '%s\n%s\n' "$iso_name" "$iso_version"
+  )
+}
+
 require_host_tools() {
-  command -v mkarchiso >/dev/null || die "mkarchiso not found"
-  command -v pacstrap >/dev/null  || die "pacstrap not found (arch-install-scripts)"
-  command -v systemd-nspawn >/dev/null || die "systemd-nspawn not found"
+  command -v mkarchiso >/dev/null || die "mkarchiso not found (pacman -S archiso)"
   [[ -d "$AYOS_DIR/releng" ]] || die "$AYOS_DIR/releng missing"
+  # Инфраструктура установщика ayder обязана быть на месте:
+  grep -q '^\[ayos\]' "$AYOS_DIR/releng/pacman.conf" \
+    || die "releng/pacman.conf: нет секции [ayos] ($AYOS_REPO_URL)"
+  grep -qx 'ayder' "$AYOS_DIR/releng/packages.x86_64" \
+    || die "releng/packages.x86_64: нет пакета ayder"
+  [[ -f "$AYOS_DIR/releng/airootfs/etc/xdg/autostart/calamares.desktop" ]] \
+    || die "нет autostart-записи для Calamares (etc/xdg/autostart/calamares.desktop)"
 }
 
-sync_calamares_config() {
-  local dst="$AYOS_DIR/releng/airootfs/etc/calamares"
-  log "syncing Calamares configuration into airootfs"
-  mkdir -p "$dst/modules" "$dst/branding/ayos/images"
-  cp "$AYOS_DIR/calamares/settings.conf" "$dst/settings.conf"
-  cp "$AYOS_DIR/calamares/modules/"*.conf "$dst/modules/"
-  # не-.conf ассеты модулей (ayos-netinstall.yaml — groupsUrl читает
-  # file:///etc/calamares/ayos-netinstall.yaml, то есть РЯДОМ с conf'ами)
-  cp "$AYOS_DIR/calamares/modules/"*.yaml "$dst/" 2>/dev/null || true
-  # python-модули (подкаталоги src): Calamares 3.4 ищет ДЕСКРИПТОР+скрипт
-  # в системном каталоге /usr/lib/calamares/modules — "local" в modules-search
-  # на /etc/calamares/modules дескрипторы НЕ смотрит (проверено отлупом
-  # "not found in module search paths"). Конфиг модуля, наоборот, ищется
-  # уровнем выше: /etc/calamares/modules/<имя>.conf — как у стоковых.
-  local sysmod="$AYOS_DIR/releng/airootfs/usr/lib/calamares/modules"
-  mkdir -p "$sysmod"
-  for d in "$AYOS_DIR/calamares/modules/"*/; do
-    [[ -d "$d" ]] || continue
-    local name
-    name="$(basename "$d")"
-    if [[ -f "$d/module.desc" ]]; then
-      rm -rf "$sysmod/$name"
-      mkdir -p "$sysmod/$name"
-      cp "$d/module.desc" "$sysmod/$name/"
-      cp "$d"/*.py "$sysmod/$name/" 2>/dev/null || true
-      rm -rf "$sysmod/$name/__pycache__"
-    fi
-    if [[ -f "$d/$name.conf" ]]; then
-      cp "$d/$name.conf" "$dst/modules/$name.conf"
-    fi
-  done
-  cp "$AYOS_DIR/calamares/branding/ayos/branding.desc" \
-     "$AYOS_DIR/calamares/branding/ayos/show.qml" "$dst/branding/ayos/"
-  cp "$AYOS_DIR/calamares/branding/ayos/images/"* "$dst/branding/ayos/"
-  cp "$AYOS_DIR/calamares/branding/ayos/"*.png "$dst/branding/ayos/"
-}
-
-# ── (1) AUR -> local repo, в изолированном chroot ──────────────────
-build_repo() {
-  log "=== repo stage: building ${AUR_PKGS[*]} in chroot ==="
-  mkdir -p "$REPO_DIR"
-
-  # Скачиваем PKGBUILD'ы (не собираем на хосте)
-  for p in "${AUR_PKGS[@]}"; do
-    [[ -d "$REPO_DIR/$p" ]] || git clone --depth 1 "https://aur.archlinux.org/$p.git" "$REPO_DIR/$p"
-  done
-
-  # The AUR Calamares PKGBUILD skips packagechooser by default. AyOS requires
-  # the standard Qt Widgets packagechooser module; retain packagechooserq skip.
-  if [[ -f "$REPO_DIR/calamares/PKGBUILD" ]]; then
-    sed -i '/^[[:space:]]*packagechooser[[:space:]]*$/d' "$REPO_DIR/calamares/PKGBUILD"
-    grep -q 'packagechooser' "$REPO_DIR/calamares/PKGBUILD" || \
-      die "Calamares PKGBUILD does not enable packagechooser"
-
-    # AUR отстаёт от upstream: там всё ещё 3.4.2, а в 3.4.3 починен
-    # partition-модуль (выравнивание границ разделов под 4K в РУЧНОЙ разметке,
-    # issue #2526; плюс фикс GPT-флага). Поднимаем pkgver/pkgrel и чекsum
-    # release-тарболла; source в PKGBUILD собран из $pkgver, URL трогать не надо.
-    local calamares_pb="$REPO_DIR/calamares/PKGBUILD"
-    sed -i 's/^pkgver=.*/pkgver=3.4.3/'  "$calamares_pb"
-    sed -i 's/^pkgrel=.*/pkgrel=1/'      "$calamares_pb"
-    sed -i "s/^sha256sums=.*/sha256sums=('144cbbf6bdcebfb21685950db4f0777218519df095f62f4aa392f28348110d18')/" "$calamares_pb"
-    grep -q '^pkgver=3.4.3$' "$calamares_pb" || die "failed to pin calamares pkgver=3.4.3"
-    log "calamares pinned to 3.4.3 (AUR ships 3.4.2)"
-  fi
-
-  # Chroot devtools: <CHROOT_DIR>/root создаётся mkarchroot (нужен sudo)
-  if [[ ! -d "$CHROOT_DIR/root" ]]; then
-    log "creating build chroot at $CHROOT_DIR/root (requires sudo)..."
-    sudo mkdir -p "$CHROOT_DIR"
-    sudo mkarchroot "$CHROOT_DIR/root" base-devel git
-  fi
-
-  # Ускорение/разгрузка сборки (§4): MAKEFLAGS настраивается в chroot-копии makepkg.conf.
-  # JOBS можно переопределить: JOBS=4 ./build.sh repo
-  # По умолчанию — половина ядер: ноутбук не «страдает» и остаётся отзывчивым.
-  JOBS="${JOBS:-$(( $(nproc) / 2 ))}"
-  if [[ -f "$CHROOT_DIR/root/etc/makepkg.conf" ]]; then
-    sudo sed -i "s/^#\?MAKEFLAGS=.*/MAKEFLAGS=\"-j${JOBS}\"/" "$CHROOT_DIR/root/etc/makepkg.conf"
-    log "MAKEFLAGS=-j${JOBS} applied to chroot makepkg.conf"
-  fi
-
-  # makechrootpkg запускается ИЗ каталога с PKGBUILD;
-  # nice/ionice — сборка не мешает работе десктопа; -c: чистая копия chroot.
-  for p in "${AUR_PKGS[@]}"; do
-    # Пропускаем только уже собранный пакет ТЕКУЩЕЙ версии из PKGBUILD:
-    # лежащий рядом .pkg.tar.zst другой версии (например, 3.4.2 при пине 3.4.3)
-    # не должен ни блокировать пересборку, ни уехать в локальную репу.
-    local wantver
-    wantver="$(sed -n 's/^pkgver=//p' "$REPO_DIR/$p/PKGBUILD" | head -1)"
-    if find "$REPO_DIR/$p" -maxdepth 1 -name "${p}-${wantver}-*.pkg.tar.zst" | grep -q .; then
-      log "$p: package $wantver already built, skipping"
-      continue
-    fi
-    find "$REPO_DIR/$p" -maxdepth 1 -name "${p}-*.pkg.tar.zst" \
-         ! -name "${p}-${wantver}-*.pkg.tar.zst" -delete
-    log "building $p $wantver in chroot (-j${JOBS}, nice 10)..."
-    ( cd "$REPO_DIR/$p" && sudo nice -n 10 ionice -c3 makechrootpkg -c -r "$CHROOT_DIR" ) || die "makechrootpkg failed for $p"
-    [[ -n $(find "$REPO_DIR/$p" -maxdepth 1 -name '*.pkg.tar.zst' | head -1) ]] || die "$p: no package built"
-  done
-
-  # Публикация в локальную репу (нужен sudo — каталог вне рабочего дерева)
-  log "publishing packages to $LOCAL_REPO..."
-  sudo mkdir -p "$LOCAL_REPO"
-  find "$REPO_DIR" -maxdepth 2 -name '*.pkg.tar.zst' ! -name '*-debug-*' -exec sudo cp -t "$LOCAL_REPO" {} +
-  sudo repo-add "$LOCAL_REPO/ayos-local.db.tar.gz" "$LOCAL_REPO"/*.pkg.tar.zst
-
-  log "repo stage done:"
-  ls -la "$LOCAL_REPO" | tee -a "$LOG"
-}
-
-# ── (2) mkarchiso ──────────────────────────────────────────────────
+# ── mkarchiso ───────────────────────────────────────────────────────
 build_iso() {
   require_host_tools
-  log "=== iso stage: mkarchiso ==="
-  sync_calamares_config
+
+  local meta iso_name iso_version
+  mapfile -t meta < <(iso_meta)
+  iso_name="${meta[0]}"
+  iso_version="${meta[1]}"
+
+  log "=== iso stage: AyOS Stuff $iso_version ($AYOS_REPO_URL) ==="
   cd "$AYOS_DIR"
+
   # work-каталог прошлой сборки содержит root-владельческие файлы (pacstrap),
   # поэтому чистим через sudo. Разрушительное действие: каталоги сборки AyOS.
   if [[ -d work || -d out ]]; then
     sudo rm -rf "$AYOS_DIR/work" "$AYOS_DIR/out"
   fi
   mkdir -p work out
+
   # Кэш пакетов: mkarchiso работает без root (pacstrap -N), системный
   # /var/cache/pacman/pkg ему не записать — pacman пишет warning
   # "couldn't find or create package cache, using /tmp/" и теряет скачанное
@@ -172,6 +84,7 @@ build_iso() {
       "$AYOS_DIR/releng/pacman.conf" > "$iso_pacman_conf"
   grep -qF "CacheDir = $pkg_cache" "$iso_pacman_conf" \
     || die "failed to set CacheDir in $iso_pacman_conf"
+
   # mkarchiso сам выполняет customize_airootfs.sh в chroot
   local log_start
   log_start=$(wc -l < "$LOG")
@@ -179,21 +92,27 @@ build_iso() {
   if sed -n "$((log_start + 1)),\$p" "$LOG" | grep -Eq 'ERROR: binary not found|Failed to install packages|errors were encountered during the build'; then
     die "mkarchiso log contains a package/initramfs error; do not use this ISO"
   fi
-  local iso="$AYOS_DIR/out/ayos-26.2-x86_64.iso"
-  [[ -s "$iso" ]] || die "mkarchiso did not produce a non-empty ISO (pacstrap/customize may have failed)"
+
+  local iso="$AYOS_DIR/out/${iso_name}-${iso_version}-x86_64.iso"
+  [[ -s "$iso" ]] || die "mkarchiso did not produce a non-empty ISO at $iso"
   file "$iso" | grep -q 'ISO 9660' || die "output is not a valid ISO 9660 image: $iso"
+
   log "ISO built:"
   ls -la "$AYOS_DIR/out" | tee -a "$LOG"
+  sha256sum "$iso" | tee -a "$LOG"
+  log "СБОРКА ЗАВЕРШЕНА: $iso"
 }
 
-case "${1:-all}" in
-  repo) require_host_tools; build_repo ;;
-  iso)  build_iso ;;
-  all)  require_host_tools; build_repo; build_iso ;;
+case "${1:-iso}" in
+  iso|all) build_iso ;;
   clean)
         echo "Удалить $AYOS_DIR/work и $AYOS_DIR/out? [y/N]"
         read -r answer
         [[ "$answer" == "y" ]] && { sudo rm -rf "$AYOS_DIR/work" "$AYOS_DIR/out"; echo "cleaned"; }
         ;;
-  *)    echo "usage: $0 {repo|iso|all|clean}" >&2; exit 1 ;;
+  repo)
+        echo "Стадия repo удалена: Calamares ставится пакетом ayder из $AYOS_REPO_URL" >&2
+        exit 0
+        ;;
+  *)    echo "usage: $0 {iso|clean}" >&2; exit 1 ;;
 esac

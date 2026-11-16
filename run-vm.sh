@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AyOS Material 26.2 — run-vm.sh
+# AyOS Stuff 26.3 — run-vm.sh
 # Запуск тестовой виртуалки: UEFI (OVMF), KVM, 4G RAM, наш ISO, qcow2-диск.
 #
 # Использование:
@@ -13,7 +13,13 @@ set -euo pipefail
 AYOS_DIR="${AYOS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 cd "$AYOS_DIR"
 
-ISO="out/ayos-26.2-x86_64.iso"
+# Имя ISO берём из profiledef.sh — источник истины один (как в build.sh).
+# file_permissions заранее ассоциативный, см. комментарий в build.sh (iso_meta).
+ISO="$( (
+  declare -A file_permissions=()
+  source "$AYOS_DIR/releng/profiledef.sh"
+  printf 'out/%s-%s-x86_64.iso\n' "$iso_name" "$iso_version"
+) )"
 DISK="ayos-test.qcow2"
 OVMF_DIR="/usr/share/edk2/x64"
 

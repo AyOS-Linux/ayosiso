@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
 
-iso_name="ayos"
+iso_name="ayos-stuff"
 iso_label="AYOS_$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)"
 iso_publisher="AyOS <https://github.com/AyOS-Linux/ayosiso>"
-iso_application="AyOS Material Live Media"
-iso_version="26.2"
+iso_application="AyOS Stuff Live Media"
+iso_version="26.3"
 install_dir="ayos"
 bootmodes=('bios.syslinux'
            'uefi.systemd-boot')

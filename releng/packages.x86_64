@@ -1,5 +1,7 @@
-# AyOS Material 26.2 — Live-пакеты (Xfce Live-сессия + установщик Calamares)
-# По одному пакету на строку; '#' — комментарии. Все пакеты существуют в репах Arch.
+# AyOS Stuff 26.3 — Live-пакеты (KDE Live-сессия + установщик Ayder)
+# По одному пакету на строку; '#' — комментарии. Все пакеты существуют в репах Arch,
+# ayder — из репы AyOS (https://ayos-linux.github.io/repo/x86_64).
+# Редакций и выбора пакетов нет: одна сборка, KDE Plasma.
 # === База ===
 base
 linux
@@ -85,21 +87,20 @@ gtk3
 gtk4
 xdg-user-dirs
 firefox
-# === Calamares (AUR) + runtime-зависимости из реп Arch ===
-calamares
-os-prober
-qt6-base
-qt6-svg
-qt6-declarative
-qt6-5compat
-yaml-cpp
-kpmcore
-boost-libs
-libpwquality
-kcoreaddons
+# === Ayder (установщик) ===
+ayder
 # === Драйверы / видео ===
+# Microcode: intel-ucode + amd-ucode ставятся в squashfs, а mkarchiso
+# (проверено в собранном ISO) вшивает их в initramfs-linux.img
+# (early_cpio + kernel/x86/microcode/{GenuineIntel,AuthenticAMD}.bin) —
+# Live грузится с микрокодом обоих производителей ЦП.
+# nvidia: владелец выбрал DKMS-вариант (nvidia-dkms вместо nvidia-open) —
+# модуль собирается под установленное ядро; linux-headers обязателен,
+# иначе dkms не сможет собрать модуль при сборке образа.
 mesa
-nvidia-open
+vulkan-mesa-implicit-layers
+nvidia-dkms
+linux-headers
 nvidia-utils
 nvidia-settings
 vulkan-radeon
@@ -109,7 +110,8 @@ vulkan-intel
 intel-media-driver
 libva-intel-driver
 xf86-video-amdgpu
-# nvidia добавляется динамически (см. customize_airootfs.sh / build-скрипт)
+# nvidia в Live тоже ставится явным списком (см. выше) — «динамической»
+# подстановки nvidia в customize_airootfs.sh/build.sh НЕТ.
 # === Утилиты Live ===
 fastfetch
 xdg-utils

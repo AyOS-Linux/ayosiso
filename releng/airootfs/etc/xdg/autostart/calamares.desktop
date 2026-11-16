@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Install AyOS Stuff
+GenericName=System Installer
+Comment=Установка AyOS Stuff в накопитель (Calamares / Ayder)
+# pkexec: polkit-rule для liveuser разрешает /usr/bin/calamares без пароля.
+# Задержка 6 с — пока Plasma поднимет polkit-агент, иначе pkexec может
+# остаться без агента и не получить авторизацию.
+Exec=sh -c "sleep 6 && pkexec /usr/bin/calamares"
+Icon=calamares
+Terminal=false
+Categories=System;Settings;
+StartupNotify=false
+X-GNOME-Autostart-enabled=true

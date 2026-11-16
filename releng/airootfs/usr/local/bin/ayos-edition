@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# AyOS Material 26.2 — /usr/local/bin/ayos-edition
-# Вызывается из Calamares (contextualprocess) В CHROOT целевой системы.
-# Устанавливает набор пакетов выбранной редакции через pacman.
-# Запуск в chroot гарантирует shellprocess (dontChroot: false).
+# AyOS Stuff 26.3 — /usr/local/bin/ayos-edition
+# Вызывается из Calamares (shellprocess@ayos_edition) В CHROOT целевой системы.
+# Редакций нет: только KDE Plasma (набор everyday — то имя, которое зашито в
+# конфиге установщика ayder). Запуск в chroot гарантирует shellprocess
+# (dontChroot: false).
 
 set -euo pipefail
 
@@ -12,14 +13,21 @@ PACMAN=(pacman --noconfirm --needed)
 
 log() { printf '[ayos-edition] %s\n' "$*"; }
 
-[[ -n "$EDITION" ]] || { echo "usage: ayos-edition <everyday|light|barebone|nebula> [kernel]" >&2; exit 1; }
+# Единственная поддерживаемая «редакция» — everyday (KDE Plasma).
+if [[ -z "$EDITION" || "$EDITION" != "everyday" ]]; then
+    echo "usage: ayos-edition everyday [kernel]   (AyOS Stuff — только KDE Plasma)" >&2
+    exit 1
+fi
 
+# nvidia: DKMS-вариант (владелец: «nvidia dkms ставь вместо nvidia-open») —
+# модуль собирается под конкретное ядро цели, для чего в транзакцию идут
+# соответствующие заголовки ядра.
 case "$KERNEL" in
-    linux)       NV=nvidia-open ;;
-    linux-lts)   NV=nvidia-open-lts ;;
-    linux-zen)   NV=nvidia-open-dkms; NVEXTRA=(linux-zen-headers) ;;
+    linux)       NV=nvidia-dkms; NVEXTRA=(linux-headers) ;;
+    linux-lts)   NV=nvidia-dkms; NVEXTRA=(linux-lts-headers) ;;
+    linux-zen)   NV=nvidia-dkms; NVEXTRA=(linux-zen-headers) ;;
     *)           echo "ayos-edition: unknown kernel '$KERNEL', falling back to linux" >&2
-                 KERNEL=linux; NV=nvidia-open ;;
+                 KERNEL=linux; NV=nvidia-dkms; NVEXTRA=(linux-headers) ;;
 esac
 
 # mkarchiso вычищает /boot из airootfs (ядро живёт на ISO9660, не в squashfs),
@@ -43,6 +51,21 @@ if [[ ! -s /etc/pacman.d/gnupg/pubring.gpg ]]; then
     log "Initializing pacman keyring in target..."
     pacman-key --init
     pacman-key --populate archlinux
+fi
+# Репозиторий AyOS в целевой системе: pacstrap ставит конфиг из пакета pacman
+# (флаг -P ayder не передаёт), поэтому секцию дописываем сами здесь — этот
+# скрипт исполняется ВНУТРИ цели (shellprocess@ayos_edition, dontChroot: false).
+# Тот же текст добавляет customize_airootfs.sh в Live.
+if ! grep -q '^\[ayos\]' /etc/pacman.conf; then
+    cat >> /etc/pacman.conf <<'PACEOF'
+
+# === AyOS repo: ayder (установщик) и пакеты AyOS ===
+# https://ayos-linux.github.io/repo/x86_64
+[ayos]
+Server = https://ayos-linux.github.io/repo/$arch
+SigLevel = Optional TrustAll
+PACEOF
+    log "Added [ayos] repository to target /etc/pacman.conf"
 fi
 # initramfs установленной системы — «дисковой» конфигурации, БЕЗ archiso-хуков:
 # drop-in /etc/mkinitcpio.conf.d/archiso.conf нужен только live-среде (initramfs
@@ -69,63 +92,19 @@ if [[ ! -f "$KIMG" ]]; then
     log "Target /boot has no $KERNEL; restoring from repositories..."
     pacman --noconfirm -Sy "$KERNEL"
 fi
-# Общий базис (base + firmware + сеть + аудио + драйверы) ставится модулем
-# ayospacstrap ещё до этого шага; pacman здесь ставит только дельту редакции.
+# Общий базис (base + firmware + сеть + аудио + драйверы) уже установлен
+# pacstrap'ом (shellprocess@pacstrap) до этого шага; здесь — набор KDE Plasma.
 
-case "$EDITION" in
-  everyday)
-    log "Installing KDE Plasma (Everyday)..."
-    "${PACMAN[@]}" -Sy \
-      plasma-meta \
-      dolphin konsole kate discover \
-      sddm sddm-kcm \
-      plasma-nm plasma-pa \
-      xdg-desktop-portal-kde \
-      firefox kdegraphics-thumbnailers ffmpegthumbs \
-      "$NV" nvidia-settings ${NVEXTRA[@]+"${NVEXTRA[@]}"}
-    systemctl enable sddm.service
-    ;;
+log "Installing KDE Plasma..."
+"${PACMAN[@]}" -Sy \
+  plasma-meta \
+  dolphin konsole kate discover \
+  sddm sddm-kcm \
+  plasma-nm plasma-pa \
+  xdg-desktop-portal-kde \
+  firefox kdegraphics-thumbnailers ffmpegthumbs \
+  "$NV" nvidia-settings ${NVEXTRA[@]+"${NVEXTRA[@]}"}
+systemctl enable sddm.service
 
-  light)
-    log "Installing Xfce (Light)..."
-    "${PACMAN[@]}" -Sy \
-      xfce4 \
-      thunar xfce4-terminal mousepad \
-      lightdm lightdm-gtk-greeter \
-      xdg-desktop-portal-gtk \
-      firefox \
-      "$NV" nvidia-settings ${NVEXTRA[@]+"${NVEXTRA[@]}"}
-    systemctl enable lightdm.service
-    ;;
-
-  barebone)
-    log "Barebone: минимальный серверный базис..."
-    "${PACMAN[@]}" -Sy \
-      networkmanager nano base-devel git \
-      "$KERNEL" linux-firmware
-    systemctl set-default multi-user.target
-    ;;
-
-  nebula)
-    log "Installing GNOME (Nebula)..."
-    "${PACMAN[@]}" -Sy \
-      gnome \
-      nautilus gnome-terminal gedit gnome-software \
-      gdm \
-      xdg-desktop-portal-gnome \
-      firefox \
-      "$NV" nvidia-settings ${NVEXTRA[@]+"${NVEXTRA[@]}"}
-    systemctl enable gdm.service
-    ;;
-
-  *)
-    echo "ayos-edition: unknown edition '$EDITION'" >&2
-    exit 1
-    ;;
-esac
-
-# После установки редакции: удалить Live-специфичные пакеты из целевой системы.
-# Calamares пакеты ставит в chroot; Live-утилиты убираем, если они не нужны.
-# (Не критично: pacman -Rns --nd в chroot не трогает зависимости.)
-log "edition '$EDITION' done."
+log "KDE Plasma set installed."
 exit 0
